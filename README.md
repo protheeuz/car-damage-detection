@@ -1,4 +1,4 @@
-# FruitRipeness
+# CarCare, Car Damage Detection Buddy!
 
 A new Flutter project.
 
