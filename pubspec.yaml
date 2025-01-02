@@ -1,5 +1,5 @@
-name: fruit_ripeness
-description: "A new Flutter project."
+name: car_damage_detection
+description: "Car Damage Detection using Flutter & YOLOv11"
 
 publish_to: 'none'
 

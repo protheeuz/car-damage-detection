@@ -1,4 +1,4 @@
-package com.mathtech.fruit_ripeness
+package com.mathtech.car_damage_detection
 
 import io.flutter.embedding.android.FlutterActivity
 

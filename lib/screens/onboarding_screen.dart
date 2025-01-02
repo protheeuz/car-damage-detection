@@ -182,26 +182,26 @@ class OnBoard {
 final List<OnBoard> demoData = [
   OnBoard(
     animation: "assets/animations/animation1.json",
-    title: "Hi, check your fruit ripeness\nusing our app",
-    description: "Upload a picture and let our AI analyze your fruit ripeness!",
+    title: "Deteksi Kerusakan Kendaraan\nMenggunakan Aplikasi Kami",
+    description: "Unggah foto dan biarkan AI kami menganalisis kerusakan pada kendaraan Anda!",
   ),
   OnBoard(
     animation: "assets/animations/animation2.json",
-    title: "You can check \nevery fruit quality",
+    title: "Deteksi Berbagai Jenis\nKerusakan Kendaraan",
     description:
-        "Simply upload a picture, and our system will identify fruit quality.",
+        "Cukup unggah foto, dan sistem kami akan mengidentifikasi jenis kerusakan seperti retak, penyok, pecah kaca, dan lainnya.",
   ),
   OnBoard(
     animation: "assets/animations/animation3.json",
-    title: "Using AI Technology",
+    title: "Menggunakan Teknologi AI",
     description:
-        "Our system leverages machine learning for accurate fruit ripeness detection.",
+        "Sistem kami menggunakan machine learning untuk deteksi kerusakan yang akurat dan tingkat keparahannya.",
   ),
   OnBoard(
     animation: "",
-    title: "Fruit Ripeness Classification",
+    title: "Deteksi dan bantu\nKlasifikasi Kerusakan Kendaraan",
     description:
-        "Simply upload a picture, and let our system provide the best analysis to ensure your fruit is ready to eat or sell!",
+        "Cukup unggah foto, dan biarkan sistem kami memberikan analisis terbaik untuk mengetahui tingkat kerusakan pada kendaraan Anda!",
   ),
 ];
 
@@ -267,7 +267,7 @@ class OnBoardContent extends StatelessWidget {
               ),
             ),
             child: const Text(
-              'GET STARTED',
+              'MULAI PENDETEKSIAN',
               style: TextStyle(fontSize: 18, color: Colors.white),
             ),
           ),
