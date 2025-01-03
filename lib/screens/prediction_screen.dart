@@ -22,7 +22,7 @@ class PredictionScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 4,
         title: const Text(
-          'Deteksi Kerusakan Kendaraan',
+          'Hasil Deteksi Kerusakan',
           style: TextStyle(color: Colors.black),
         ),
         centerTitle: true,
@@ -116,42 +116,51 @@ class PredictionScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  ...daftarKerusakan.map((kerusakan) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Tipe: ${kerusakan['tipe_kerusakan']}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontFamily: 'Poppins',
-                            ),
+                  // Menggunakan ListView untuk daftar kerusakan
+                  ListView.builder(
+                    shrinkWrap: true, // Agar tidak memperluas ukuran layar
+                    physics: const NeverScrollableScrollPhysics(), // Tidak ada scroll tambahan
+                    itemCount: daftarKerusakan.length,
+                    itemBuilder: (context, index) {
+                      final kerusakan = daftarKerusakan[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          Text(
-                            'Tingkat Keparahan: ${kerusakan['tingkat_keparahan']}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontFamily: 'Poppins',
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Tipe: ${kerusakan['tipe_kerusakan'] ?? 'Tidak Diketahui'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              Text(
+                                'Tingkat Keparahan: ${kerusakan['tingkat_keparahan'] ?? 'Tidak Diketahui'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              Text(
+                                'Confidence: ${kerusakan['confidence'] ?? 'Tidak Diketahui'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            'Confidence: ${kerusakan['confidence']}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontFamily: 'Poppins',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )).toList(),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),

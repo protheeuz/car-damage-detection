@@ -4,22 +4,26 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String _baseUrl = 'http://192.168.20.136:5000';
+  static const String _baseUrl = 'https://hardy-tolerant-kodiak.ngrok-free.app';
   // static const String _baseUrl = 'http://10.0.2.2:5000';  // Untuk Android Emulator
   // static const String _baseUrl = 'http://localhost:5000';  // Untuk iOS Simulator
   // static const String _baseUrl = 'http://ip:5000';  // Untuk device fisik
 
-  /// Mengirim gambar ke model utk mendapatkan hasil deteksi kerusakan
+  /// Mengirim gambar ke model untuk mendapatkan hasil deteksi kerusakan
   static Future<Map<String, dynamic>> sendImageToModel(File imageFile) async {
     final url = Uri.parse('$_baseUrl/detect_damage');
+    
+    // Validasi ukuran file sebelum dikirim
+    if (await _isFileTooLarge(imageFile)) {
+      throw Exception('File terlalu besar, harap pilih gambar yang lebih kecil.');
+    }
+
     final request = http.MultipartRequest('POST', url)
-      ..files.add(await http.MultipartFile.fromPath(
-        'file',
-        imageFile.path,
-      ));
+      ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
 
     try {
-      final streamedResponse = await request.send();
+      // Menambahkan timeout untuk request
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
@@ -42,9 +46,14 @@ class ApiService {
       }
     } on SocketException {
       throw Exception('Tidak dapat terhubung ke server. Pastikan server berjalan dan dapat diakses.');
-    } catch (e) {
-      throw Exception('Error saat mengirim gambar: $e');
     }
+  }
+
+  /// Mengecek apakah file terlalu besar untuk dikirim
+  static Future<bool> _isFileTooLarge(File imageFile) async {
+    final fileSize = await imageFile.length();
+    const maxSize = 5 * 1024 * 1024; 
+    return fileSize > maxSize;
   }
 
   /// Mengkonversi base64 string ke Image
@@ -52,7 +61,7 @@ class ApiService {
     try {
       return Image.memory(base64Decode(base64String));
     } catch (e) {
-      print('Error converting base64 to image: $e');
+      debugPrint('Error converting base64 to image: $e');
       return null;
     }
   }

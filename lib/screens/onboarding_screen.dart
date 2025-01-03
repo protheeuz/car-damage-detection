@@ -232,7 +232,7 @@ class OnBoardContent extends StatelessWidget {
           ),
         if (isLast)
           Image.asset(
-            'assets/images/image1.png',
+            'assets/images/image2.png',
             height: 280,
             width: 200,
           ),

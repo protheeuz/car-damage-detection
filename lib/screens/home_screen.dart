@@ -13,12 +13,12 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   CameraController? _cameraController;
   List<CameraDescription>? cameras;
   late AnimationController _animationController;
   bool _isLoading = false; // Flag untuk loading animasi
+  bool _isCameraInitialized = false; // Flag untuk mengetahui status kamera
 
   @override
   void initState() {
@@ -36,9 +36,13 @@ class _HomeScreenState extends State<HomeScreen>
     cameras = await availableCameras();
     if (cameras != null && cameras!.isNotEmpty) {
       _cameraController = CameraController(cameras![0], ResolutionPreset.max);
-      await _cameraController?.initialize();
-      if (mounted) {
-        setState(() {});
+      try {
+        await _cameraController?.initialize();
+        setState(() {
+          _isCameraInitialized = true;
+        });
+      } catch (e) {
+        _showErrorDialog('Failed to initialize camera: $e');
       }
     }
   }
@@ -50,8 +54,7 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  void _navigateToPredictionScreen(
-      File imageFile, Map<String, dynamic> predictionResult) {
+  void _navigateToPredictionScreen(File imageFile, Map<String, dynamic> predictionResult) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -74,7 +77,6 @@ class _HomeScreenState extends State<HomeScreen>
       });
       try {
         final prediction = await ApiService.sendImageToModel(file);
-        print('Prediction from Gallery: $prediction');
         setState(() {
           _isLoading = false;
         });
@@ -96,7 +98,6 @@ class _HomeScreenState extends State<HomeScreen>
       try {
         final file = await _cameraController!.takePicture();
         final prediction = await ApiService.sendImageToModel(File(file.path));
-        print('Prediction from Camera: $prediction');
         setState(() {
           _isLoading = false;
         });
@@ -107,6 +108,8 @@ class _HomeScreenState extends State<HomeScreen>
         });
         _showErrorDialog(e.toString());
       }
+    } else {
+      _showErrorDialog('Kamera belum terhubung atau tidak dapat diakses');
     }
   }
 
@@ -134,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen>
     const framePadding = 30.0; // Padding antara frame dan kamera
 
     return Scaffold(
-      backgroundColor: Colors.greenAccent, // Warna latar belakang utama
+      backgroundColor: Colors.greenAccent,
       body: Stack(
         children: [
           // Layout utama (kamera + navbar)
@@ -160,10 +163,10 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 alignment: Alignment.center,
                 child: const Text(
-                  'Camera Detection',
+                  'Pilih melalui Kamera & Galeri',
                   style: TextStyle(
                     color: Colors.black,
-                    fontSize: 22,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -174,8 +177,7 @@ class _HomeScreenState extends State<HomeScreen>
                   alignment: Alignment.center,
                   children: [
                     // Camera Preview
-                    if (_cameraController != null &&
-                        _cameraController!.value.isInitialized)
+                    if (_isCameraInitialized)
                       Center(
                         child: SizedBox(
                           width: frameWidth - framePadding * 3,
@@ -192,9 +194,7 @@ class _HomeScreenState extends State<HomeScreen>
                     AnimatedBuilder(
                       animation: _animationController,
                       builder: (context, child) {
-                        final scale = 1.0 +
-                            (_animationController.value *
-                                0.05); // Animasi skala
+                        final scale = 1.0 + (_animationController.value * 0.05); // Animasi skala
                         return Align(
                           alignment: Alignment.center,
                           child: Transform.scale(
@@ -210,7 +210,6 @@ class _HomeScreenState extends State<HomeScreen>
                   ],
                 ),
               ),
-
               // Bottom Navbar
               Container(
                 height: 100,
@@ -251,7 +250,6 @@ class _HomeScreenState extends State<HomeScreen>
                         height: 30,
                       ),
                       onPressed: () {
-                        // Switch camera logic
                         if (cameras != null && cameras!.length > 1) {
                           final cameraIndex =
                               cameras!.indexOf(_cameraController!.description);
@@ -270,8 +268,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ],
           ),
-          // Floating QR Scanner Button (di atas semua layout)
-          Positioned(
+           Positioned(
             top: 628,
             left: MediaQuery.of(context).size.width / 2 - 35,
             child: Stack(
