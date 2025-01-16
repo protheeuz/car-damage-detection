@@ -6,26 +6,29 @@ import 'package:lottie/lottie.dart';
 import '../services/api_service.dart';
 import 'prediction_screen.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class DetectionScreen extends StatefulWidget {
+  const DetectionScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<DetectionScreen> createState() => _DetectionScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _DetectionScreenState extends State<DetectionScreen>
+    with SingleTickerProviderStateMixin {
   CameraController? _cameraController;
   List<CameraDescription>? cameras;
   late AnimationController _animationController;
-  bool _isLoading = false; // Flag untuk loading animasi
-  bool _isCameraInitialized = false; // Flag untuk mengetahui status kamera
+  bool _isLoading = false;
+  bool _isCameraInitialized = false;
+  bool _isCapturing = false;
+
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
 
-    // Inisialisasi AnimationController
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -54,15 +57,104 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  void _navigateToPredictionScreen(File imageFile, Map<String, dynamic> predictionResult) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PredictionScreen(
-          imageFile: imageFile,
-          predictionResult: predictionResult,
-        ),
-      ),
+  Future<void> _showVehicleInputDialog(File imageFile) async {
+    final TextEditingController platNomorController = TextEditingController();
+    final TextEditingController tahunKendaraanController =
+        TextEditingController();
+    String selectedModel = "Honda";
+
+    bool isFormValid() {
+      return platNomorController.text.trim().isNotEmpty &&
+          selectedModel.isNotEmpty &&
+          tahunKendaraanController.text.trim().isNotEmpty &&
+          RegExp(r'^\d{4}$').hasMatch(tahunKendaraanController.text.trim());
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Masukkan Data Kendaraan"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: platNomorController,
+                decoration: const InputDecoration(
+                  labelText: "Plat Nomor",
+                  hintText: "Contoh: B 1234 TYX",
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: selectedModel,
+                items: const [
+                  DropdownMenuItem(value: "Honda", child: Text("Honda")),
+                  DropdownMenuItem(value: "Toyota", child: Text("Toyota")),
+                  DropdownMenuItem(
+                      value: "Mitsubishi", child: Text("Mitsubishi")),
+                  DropdownMenuItem(value: "Hyundai", child: Text("Hyundai")),
+                  DropdownMenuItem(value: "Wuling", child: Text("Wuling")),
+                  DropdownMenuItem(value: "Lainnya", child: Text("Lainnya")),
+                ],
+                onChanged: (value) {
+                  selectedModel = value!;
+                },
+                decoration: const InputDecoration(labelText: "Model Kendaraan"),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: tahunKendaraanController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: "Tahun Kendaraan",
+                  hintText: "Contoh: 2023",
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Batal"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final platNomor = platNomorController.text.trim();
+                final tahunKendaraan = tahunKendaraanController.text.trim();
+
+                if (platNomor.isEmpty ||
+                    selectedModel.isEmpty ||
+                    tahunKendaraan.isEmpty) {
+                  _showErrorDialog("Semua field harus diisi!");
+                  return;
+                }
+
+                Navigator.pop(context);
+
+                bool isVehicleSaved = await _apiService.addVehicle(
+                  platNomor,
+                  selectedModel,
+                  int.parse(tahunKendaraan),
+                );
+
+                if (isVehicleSaved) {
+                  try {
+                    final prediction =
+                        await _apiService.detectDamage(imageFile);
+                    _navigateToPredictionScreen(imageFile, prediction!);
+                  } catch (e) {
+                    _showErrorDialog("Gagal melakukan pendeteksian: $e");
+                  }
+                } else {
+                  _showErrorDialog("Gagal menyimpan data kendaraan.");
+                }
+              },
+              child: const Text("Lanjutkan"),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -71,45 +163,35 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile != null) {
-      final file = File(pickedFile.path);
-      setState(() {
-        _isLoading = true;
-      });
-      try {
-        final prediction = await ApiService.sendImageToModel(file);
-        setState(() {
-          _isLoading = false;
-        });
-        _navigateToPredictionScreen(file, prediction);
-      } catch (e) {
-        setState(() {
-          _isLoading = false;
-        });
-        _showErrorDialog(e.toString());
-      }
+      File imageFile = File(pickedFile.path);
+      await _showVehicleInputDialog(imageFile);
     }
   }
 
   Future<void> _predictFromCamera() async {
     if (_cameraController != null && _cameraController!.value.isInitialized) {
+      if (_isCapturing) {
+        _showErrorDialog("Sedang mengambil gambar, harap tunggu...");
+        return;
+      }
       setState(() {
-        _isLoading = true;
+        _isCapturing = true;
       });
+
       try {
-        final file = await _cameraController!.takePicture();
-        final prediction = await ApiService.sendImageToModel(File(file.path));
+        final imageFile = await _cameraController!.takePicture();
         setState(() {
-          _isLoading = false;
+          _isCapturing = false;
         });
-        _navigateToPredictionScreen(File(file.path), prediction);
+        await _showVehicleInputDialog(File(imageFile.path));
       } catch (e) {
         setState(() {
-          _isLoading = false;
+          _isCapturing = false;
         });
-        _showErrorDialog(e.toString());
+        _showErrorDialog("Gagal mengambil gambar dari kamera: $e");
       }
     } else {
-      _showErrorDialog('Kamera belum terhubung atau tidak dapat diakses');
+      _showErrorDialog("Kamera belum terhubung atau tidak dapat diakses");
     }
   }
 
@@ -129,21 +211,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  void _navigateToPredictionScreen(
+      File imageFile, Map<String, dynamic> predictionResult) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PredictionScreen(
+          imageFile: imageFile,
+          predictionResult: predictionResult,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final frameWidth = screenWidth * 0.95; // Lebar frame kamera
-    final frameHeight = frameWidth * 1.60; // Tinggi frame kamera (4:3)
-    const framePadding = 30.0; // Padding antara frame dan kamera
+    final frameWidth = screenWidth * 0.95;
+    final frameHeight = frameWidth * 1.60;
+    const framePadding = 30.0;
 
     return Scaffold(
       backgroundColor: Colors.greenAccent,
       body: Stack(
         children: [
-          // Layout utama (kamera + navbar)
           Column(
             children: [
-              // Custom AppBar
               Container(
                 height: 120,
                 decoration: const BoxDecoration(
@@ -171,12 +264,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                 ),
               ),
-              // Camera Preview with Frame
               Expanded(
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Camera Preview
                     if (_isCameraInitialized)
                       Center(
                         child: SizedBox(
@@ -190,11 +281,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       )
                     else
                       const Center(child: CircularProgressIndicator()),
-                    // Overlay with animated frame
                     AnimatedBuilder(
                       animation: _animationController,
                       builder: (context, child) {
-                        final scale = 1.0 + (_animationController.value * 0.05); // Animasi skala
+                        final scale = 1.0 + (_animationController.value * 0.05);
                         return Align(
                           alignment: Alignment.center,
                           child: Transform.scale(
@@ -210,7 +300,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ],
                 ),
               ),
-              // Bottom Navbar
               Container(
                 height: 100,
                 decoration: const BoxDecoration(
@@ -233,7 +322,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Open Gallery Button
                     IconButton(
                       icon: Image.asset(
                         'assets/icons/gallery.png',
@@ -242,7 +330,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                       onPressed: _predictFromGallery,
                     ),
-                    // Switch Camera Button
                     IconButton(
                       icon: Image.asset(
                         'assets/icons/camera-switch.png',
@@ -268,7 +355,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             ],
           ),
-           Positioned(
+          Positioned(
             top: 628,
             left: MediaQuery.of(context).size.width / 2 - 35,
             child: Stack(
@@ -301,17 +388,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ],
             ),
           ),
-          // Animasi loading dengan overlay blur
           if (_isLoading)
             Stack(
               children: [
-                // Blur background
                 Positioned.fill(
                   child: Container(
                     color: Colors.black.withOpacity(0.5),
                   ),
                 ),
-                // Loading animation
                 Center(
                   child: Container(
                     width: 80,
@@ -335,7 +419,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 }
 
-// Custom Painter for Frame Lines
 class FramePainter extends CustomPainter {
   final double padding;
 
@@ -350,25 +433,21 @@ class FramePainter extends CustomPainter {
 
     const cornerLength = 30.0;
 
-    // Korner atas kiri
     canvas.drawLine(Offset(padding, padding),
         Offset(padding + cornerLength, padding), paint);
     canvas.drawLine(Offset(padding, padding),
         Offset(padding, padding + cornerLength), paint);
 
-    // Korner atas kanan
     canvas.drawLine(Offset(size.width - padding, padding),
         Offset(size.width - padding - cornerLength, padding), paint);
     canvas.drawLine(Offset(size.width - padding, padding),
         Offset(size.width - padding, padding + cornerLength), paint);
 
-    // Korner bawah kiri
     canvas.drawLine(Offset(padding, size.height - padding),
         Offset(padding, size.height - padding - cornerLength), paint);
     canvas.drawLine(Offset(padding, size.height - padding),
         Offset(padding + cornerLength, size.height - padding), paint);
 
-    // Korner bawah kanan
     canvas.drawLine(
         Offset(size.width - padding, size.height - padding),
         Offset(size.width - padding - cornerLength, size.height - padding),

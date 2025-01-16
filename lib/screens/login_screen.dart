@@ -1,11 +1,8 @@
-import 'package:debenih_release/constant.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:debenih_release/services/api_service.dart';
-import 'package:debenih_release/widgets/customcircular.dart';
-
 import '../constants/constants.dart';
+import '../services/api_service.dart';
 import '../widgets/customcircular.dart';
 import 'register_screen.dart';
 
@@ -41,18 +38,18 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = await _apiService.login(username, password);
       if (user != null) {
         await storage.write(key: 'access_token', value: user.accessToken);
-        await storage.write(key: 'user_id', value: user.userId.toString());
-        await storage.write(key: 'username', value: user.username);
+        // await storage.write(key: 'user_id', value: user.userId.toString());
+        // await storage.write(key: 'username', value: user.username);
         await storage.write(key: 'nama_lengkap', value: user.namaLengkap);
-        Navigator.pushReplacementNamed(context, '/home', arguments: user);
+        Navigator.pushReplacementNamed(context, '/dashboard', arguments: user);
       } else {
-        _showCupertinoDialog("Error", "Gagal login. Username atau password salah.");
+        _showCupertinoDialog(
+            "Error", "Gagal login. Username atau password salah.");
       }
     } catch (e) {
       _showCupertinoDialog(
           "Error", "Terjadi kesalahan saat login. Silakan coba lagi.");
     }
-
     setState(() {
       _isLoading = false;
     });
@@ -186,12 +183,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 _isLoading
                     ? const Center(
                         child: CustomCircularProgressIndicator(
-                            imagePath: 'assets/logo/circularcustom.png', size: 25),
+                            imagePath: 'assets/logo/circularcustom.png',
+                            size: 25),
                       )
                     : InkWell(
                         onTap: _login,
                         borderRadius: BorderRadius.circular(5.0),
-                        child:Container(
+                        child: Container(
                           height: 45,
                           width: double.infinity,
                           decoration: BoxDecoration(

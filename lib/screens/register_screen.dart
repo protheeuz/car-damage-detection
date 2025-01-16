@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:debenih_release/services/api_service.dart';
-import 'package:debenih_release/widgets/customcircular.dart';
 
-import '../constant.dart';
 import '../constants/constants.dart';
+import '../services/api_service.dart';
 import '../widgets/customcircular.dart';
 import 'login_screen.dart';
 
@@ -24,40 +22,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final ApiService _apiService = ApiService();
 
   Future<void> _register() async {
-  String username = _usernameController.text.trim();
-  String namaLengkap = _namaLengkapController.text.trim();
-  String password = _passwordController.text.trim();
+    String username = _usernameController.text.trim();
+    String namaLengkap = _namaLengkapController.text.trim();
+    String password = _passwordController.text.trim();
 
-  if (username.isEmpty || namaLengkap.isEmpty || password.isEmpty) {
-    _showCupertinoDialog("Error", "Semua field harus diisi");
-    return;
-  }
-
-  setState(() {
-    _isLoading = true;
-  });
-
-  try {
-    bool success = await _apiService.register(username, namaLengkap, password);
-    if (success) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
-    } else {
-      _showCupertinoDialog(
-          "Error", "Registrasi gagal. Username sudah digunakan.");
+    if (username.isEmpty || namaLengkap.isEmpty || password.isEmpty) {
+      _showCupertinoDialog("Error", "Semua field harus diisi");
+      return;
     }
-  } catch (e) {
-    _showCupertinoDialog(
-        "Error", "Terjadi kesalahan saat registrasi. Silakan coba lagi.");
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      bool success =
+          await _apiService.register(username, namaLengkap, password);
+      if (success) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      } else {
+        _showCupertinoDialog(
+            "Error", "Registrasi gagal. Username sudah digunakan.");
+      }
+    } catch (e) {
+      _showCupertinoDialog(
+          "Error", "Terjadi kesalahan saat registrasi. Silakan coba lagi.");
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
   }
-
-  setState(() {
-    _isLoading = false;
-  });
-}
-
 
   void _showCupertinoDialog(String title, String message) {
     showCupertinoDialog(
@@ -214,8 +212,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 _isLoading
                     ? const Center(
                         child: CustomCircularProgressIndicator(
-                          imagePath: 'assets/logo/circularcustom.png', size:25
-                        ),
+                            imagePath: 'assets/logo/circularcustom.png',
+                            size: 25),
                       )
                     : InkWell(
                         onTap: _register,
@@ -278,12 +276,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: const Text(
                         "Masuk di sini ",
                         style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: kPrimaryColor,
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: kPrimaryColor,
+                        ),
                       ),
-                    ),
                     ),
                   ],
                 )

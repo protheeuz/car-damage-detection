@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../utils/permission_helper.dart';
 
 class OnBoardingScreen extends StatefulWidget {
   const OnBoardingScreen({super.key});
@@ -68,7 +67,7 @@ class _OnBoardingScreenState extends State<OnBoardingScreen> {
                     ? TextButton(
                         onPressed: _skipToLastPage,
                         child: const Text(
-                          'Skip',
+                          'Lewati',
                           style: TextStyle(color: Colors.greenAccent),
                         ),
                       )
@@ -183,7 +182,8 @@ final List<OnBoard> demoData = [
   OnBoard(
     animation: "assets/animations/animation1.json",
     title: "Deteksi Kerusakan Kendaraan\nMenggunakan Aplikasi Kami",
-    description: "Unggah foto dan biarkan AI kami menganalisis kerusakan pada kendaraan Anda!",
+    description:
+        "Unggah foto dan biarkan AI kami menganalisis kerusakan pada kendaraan Anda!",
   ),
   OnBoard(
     animation: "assets/animations/animation2.json",
@@ -258,7 +258,9 @@ class OnBoardContent extends StatelessWidget {
         const SizedBox(height: 25),
         if (isLast)
           ElevatedButton(
-            onPressed: onGetStarted,
+            onPressed: () {
+              Navigator.pushReplacementNamed(context, '/login');
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
