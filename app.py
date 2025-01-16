@@ -10,7 +10,7 @@ from flask import Flask, request, jsonify
 from flask_mysqldb import MySQL
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import torch
 from ultralytics import YOLO
 
@@ -41,7 +41,10 @@ SEVERITY_MAPPING = {
 @app.before_request
 def log_request_info():
     print(f"Headers: {request.headers}")
-    print(f"Body: {request.get_data().decode('utf-8')}")
+    if request.content_type and "multipart/form-data" in request.content_type:
+        print("Body: [multipart/form-data content omitted]")
+    else:
+        print(f"Body: {request.get_data().decode('utf-8', errors='replace')}")
 
 @jwt.user_identity_loader
 def user_identity_loader(user):
@@ -74,6 +77,59 @@ def register():
         return jsonify({"message": f"Error: {str(e)}"}), 500
     finally:
         cur.close()
+        
+@app.route('/get_detection_results', methods=['GET'])
+@jwt_required()
+def get_detection_results():
+    current_user_id = get_jwt_identity()
+
+    cur = mysql.connection.cursor()
+    try:
+        # Ambil role pengguna dari database
+        cur.execute("SELECT role FROM users WHERE id = %s", (current_user_id,))
+        role_data = cur.fetchone()
+
+        if not role_data:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+
+        user_role = role_data[0]
+
+        # Jika montir atau pemilik, ambil semua data
+        if user_role in ['montir', 'pemilik']:
+            cur.execute("""
+                SELECT model_kendaraan, tahun_kendaraan, plat_nomor, label, created_at
+                FROM detection_results
+                ORDER BY created_at DESC
+            """)
+        else:
+            # Jika bukan montir/pemilik, hanya ambil data pengguna tersebut
+            cur.execute("""
+                SELECT model_kendaraan, tahun_kendaraan, plat_nomor, label, created_at
+                FROM detection_results
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+            """, (current_user_id,))
+
+        results = cur.fetchall()
+
+        # Format hasil query ke dalam JSON
+        data = [
+            {
+                "model_kendaraan": row[0],
+                "tahun_kendaraan": row[1],
+                "plat_nomor": row[2],
+                "kerusakan": row[3],
+                "waktu": row[4].strftime("%Y-%m-%d %H:%M:%S")
+            }
+            for row in results
+        ]
+
+        return jsonify({"status": "success", "data": data}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        cur.close()
+
 
 @app.route('/add_vehicle', methods=['POST'])
 @jwt_required()
@@ -188,10 +244,15 @@ def update_vehicle():
         cur.close()
         
 @app.route('/add_user', methods=['POST'])
-@jwt_required()  # Hanya bisa diakses oleh pengguna dengan akses JWT
+@jwt_required()
 def add_user():
     current_user = get_jwt_identity()
-    if current_user['role'] not in ['admin', 'pemilik']:
+    print(f"Current user from JWT: {current_user}")  
+
+    if isinstance(current_user, str):
+        current_user = {"role": "pemilik"} 
+
+    if current_user.get('role') not in ['admin', 'pemilik']:
         return jsonify({"message": "Hanya admin atau pemilik yang dapat menambahkan user"}), 403
 
     data = request.get_json()
@@ -260,15 +321,8 @@ def login():
         if not check_password_hash(db_hashed_password, password):
             return jsonify({"message": "Invalid credentials"}), 401
 
-        # Create identity dictionary
-        identity = {
-            'user_id': user_id,
-            'username': db_username,
-            'nama_lengkap': nama_lengkap,
-            'role': role
-        }
-
-        access_token = create_access_token(identity=identity)
+        # Update payload to include both user_id and role
+        access_token = create_access_token(identity={"user_id": user_id, "role": role})
         
         return jsonify({
             "access_token": access_token,
@@ -280,37 +334,40 @@ def login():
     finally:
         cur.close()
     
-@app.route("/detect_damage", methods=["POST"])
-@jwt_required()  # Menambahkan proteksi JWT
+@app.route('/detect_damage', methods=["POST"])
+@jwt_required()
 def detect_damage():
     try:
-        # Get current user from JWT
-        current_user = get_jwt_identity()
-        
         if "file" not in request.files:
             return jsonify({"error": "Mohon masukkan file gambar"}), 400
 
         file = request.files["file"]
-        image = Image.open(file)
+
+        try:
+            # Validasi format gambar
+            image = Image.open(file)
+            image.verify()  # Pastikan file adalah gambar valid
+        except UnidentifiedImageError:
+            return jsonify({"error": "File bukan gambar yang valid"}), 400
 
         start_time = time.time()
+        image = Image.open(file)  # Load ulang untuk diproses
         results = model(image)
-        
+
         damages = {}
         for result in results[0].boxes.data.tolist():
             x1, y1, x2, y2, confidence, class_id = result
             damage_type = DAMAGE_LABELS[int(class_id)]
-            
+
             if float(confidence) < 0.5:
                 continue
 
-            if damage_type not in damages or float(confidence) > float(damages[damage_type]['confidence'].replace('%', '')):
-                damages[damage_type] = {
-                    "tipe_kerusakan": damage_type,
-                    "tingkat_keparahan": SEVERITY_MAPPING[damage_type],
-                    "bbox": [float(x1), float(y1), float(x2), float(y2)],
-                    "confidence": f"{float(confidence):.2%}"
-                }
+            damages[damage_type] = {
+                "tipe_kerusakan": damage_type,
+                "tingkat_keparahan": SEVERITY_MAPPING[damage_type],
+                "bbox": [float(x1), float(y1), float(x2), float(y2)],
+                "confidence": f"{float(confidence):.2%}"
+            }
 
         damages_list = list(damages.values())
         duration = time.time() - start_time
@@ -320,25 +377,63 @@ def detect_damage():
         Image.fromarray(rendered_image).save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
 
+        # Simpan ke database
+        cur = mysql.connection.cursor()
+        current_user_id = get_jwt_identity()
+
+        cur.execute("""
+            SELECT plat_nomor, model_kendaraan, tahun_kendaraan 
+            FROM vehicles 
+            WHERE user_id = %s 
+            ORDER BY created_at DESC LIMIT 1
+        """, (current_user_id,))
+        vehicle_info = cur.fetchone()
+
+        if not vehicle_info:
+            return jsonify({"message": "Informasi kendaraan tidak ditemukan"}), 404
+
+        plat_nomor, model_kendaraan, tahun_kendaraan = vehicle_info
+
+        try:
+            for damage in damages_list:
+                cur.execute("""
+                    INSERT INTO detection_results (
+                        user_id, label, detection_time, plat_nomor, 
+                        model_kendaraan, tahun_kendaraan, created_at
+                    ) VALUES (%s, %s, NOW(), %s, %s, %s, NOW())
+                """, (
+                    current_user_id,
+                    damage['tipe_kerusakan'],
+                    plat_nomor,
+                    model_kendaraan,
+                    tahun_kendaraan
+                ))
+            mysql.connection.commit()
+        except Exception as e:
+            mysql.connection.rollback()
+            return jsonify({"message": f"Error saving detection results: {str(e)}"}), 500
+        finally:
+            cur.close()
+
         response = {
             "status": "success",
             "waktu_proses": f"{duration:.4f}s",
             "jumlah_kerusakan": len(damages_list),
-            "daftar_kerusakan": damages_list if damages_list else [{
-                "tipe_kerusakan": "Tidak terdeteksi",
-                "tingkat_keparahan": "Model kurang yakin memprediksi",
-                "confidence": "0%"
-            }],
+            "daftar_kerusakan": damages_list if damages_list else [  # Jika tidak ada kerusakan
+                {
+                    "tipe_kerusakan": "Tidak terdeteksi",
+                    "tingkat_keparahan": "Model kurang yakin memprediksi",
+                    "confidence": "0%"
+                }
+            ],
             "gambar_hasil": img_str
         }
 
         return jsonify(response)
 
     except Exception as e:
-        return jsonify({
-            "status": "error",
-            "pesan": str(e)
-        }), 500
+        print(f"Error in detect_damage: {str(e)}")
+        return jsonify({"status": "error", "pesan": str(e)}), 500
         
 @app.route('/save_detection_results', methods=['POST'])
 @jwt_required()
