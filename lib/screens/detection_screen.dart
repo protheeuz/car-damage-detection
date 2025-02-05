@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:camera_360/camera_360.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
@@ -55,6 +56,108 @@ class _DetectionScreenState extends State<DetectionScreen>
     _cameraController?.dispose();
     _animationController.dispose();
     super.dispose();
+  }
+
+  // Fungsi untuk pengambilan gambar panorama 360 menggunakan camera_360
+  Future<void> _startPanoramaCapture() async {
+    // Gunakan widget Camera360 untuk menampilkan kamera panorama
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text("Panoramic Capture")),
+          body: Camera360(
+            userLoadingText: "Menyiapkan panorama...",
+            userHelperText: "Arahkan kamera ke titik",
+            userHelperTiltLeftText: "Miring ke kiri",
+            userHelperTiltRightText: "Miring ke kanan",
+            userSelectedCameraKey:
+                2, // Pilih kamera dengan wide angle, jika tersedia
+            cameraSelectorShow: true,
+            cameraSelectorInfoPopUpShow: true,
+            cameraSelectorInfoPopUpContent: const Text(
+              "Pilih kamera dengan sudut pandang terlebar di bawah ini.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xffEFEFEF)),
+            ),
+            cameraNotReadyContent: const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 20),
+                child: Text(
+                  "Kamera belum siap.",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            onCaptureEnded: (data) {
+              if (data['success'] == true) {
+                XFile panorama = data['panorama'];
+                print("Final image returned: ${panorama.toString()}");
+                _navigateToPredictionScreen(File(panorama.path), data);
+              } else {
+                print("Final image failed");
+              }
+            },
+            onCameraChanged: (cameraKey) {
+              print("Camera changed ${cameraKey.toString()}");
+            },
+            onProgressChanged: (newProgressPercentage) {
+              debugPrint(
+                  "'Panorama360': Progress changed: $newProgressPercentage");
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToPredictionScreen(
+      File imageFile, Map<String, dynamic> predictionResult) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PredictionScreen(
+          imageFile: imageFile,
+          predictionResult: predictionResult,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _predictFromGallery() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      File imageFile = File(pickedFile.path);
+      await _showVehicleInputDialog(imageFile);
+    }
+  }
+
+  Future<void> _predictFromCamera() async {
+    if (_cameraController != null && _cameraController!.value.isInitialized) {
+      if (_isCapturing) {
+        _showErrorDialog("Sedang mengambil gambar, harap tunggu...");
+        return;
+      }
+      setState(() {
+        _isCapturing = true;
+      });
+      try {
+        final imageFile = await _cameraController!.takePicture();
+        setState(() {
+          _isCapturing = false;
+        });
+        await _showVehicleInputDialog(File(imageFile.path));
+      } catch (e) {
+        setState(() {
+          _isCapturing = false;
+        });
+        _showErrorDialog("Gagal mengambil gambar dari kamera: $e");
+      }
+    } else {
+      _showErrorDialog("Kamera belum terhubung atau tidak dapat diakses");
+    }
   }
 
   Future<void> _showVehicleInputDialog(File imageFile) async {
@@ -158,43 +261,6 @@ class _DetectionScreenState extends State<DetectionScreen>
     );
   }
 
-  Future<void> _predictFromGallery() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
-    if (pickedFile != null) {
-      File imageFile = File(pickedFile.path);
-      await _showVehicleInputDialog(imageFile);
-    }
-  }
-
-  Future<void> _predictFromCamera() async {
-    if (_cameraController != null && _cameraController!.value.isInitialized) {
-      if (_isCapturing) {
-        _showErrorDialog("Sedang mengambil gambar, harap tunggu...");
-        return;
-      }
-      setState(() {
-        _isCapturing = true;
-      });
-
-      try {
-        final imageFile = await _cameraController!.takePicture();
-        setState(() {
-          _isCapturing = false;
-        });
-        await _showVehicleInputDialog(File(imageFile.path));
-      } catch (e) {
-        setState(() {
-          _isCapturing = false;
-        });
-        _showErrorDialog("Gagal mengambil gambar dari kamera: $e");
-      }
-    } else {
-      _showErrorDialog("Kamera belum terhubung atau tidak dapat diakses");
-    }
-  }
-
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -207,19 +273,6 @@ class _DetectionScreenState extends State<DetectionScreen>
             child: const Text('OK'),
           ),
         ],
-      ),
-    );
-  }
-
-  void _navigateToPredictionScreen(
-      File imageFile, Map<String, dynamic> predictionResult) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PredictionScreen(
-          imageFile: imageFile,
-          predictionResult: predictionResult,
-        ),
       ),
     );
   }
@@ -388,31 +441,40 @@ class _DetectionScreenState extends State<DetectionScreen>
               ],
             ),
           ),
-          if (_isLoading)
-            Stack(
+          Positioned(
+            bottom: 20,
+            left: MediaQuery.of(context).size.width / 2 - 35,
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.black.withOpacity(0.5),
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.blue,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 4,
+                        spreadRadius: 2,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ),
-                Center(
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                  child: IconButton(
+                    icon: Image.asset(
+                      'assets/icons/panoramic.png',
+                      width: 30,
+                      height: 30,
                     ),
-                    child: Lottie.asset(
-                      'assets/animations/loading-animation.json',
-                      width: 150,
-                      height: 150,
-                    ),
+                    onPressed:
+                        _startPanoramaCapture,
                   ),
                 ),
               ],
             ),
+          ),
         ],
       ),
     );

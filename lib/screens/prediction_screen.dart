@@ -123,6 +123,9 @@ class PredictionScreen extends StatelessWidget {
                     itemCount: daftarKerusakan.length,
                     itemBuilder: (context, index) {
                       final kerusakan = daftarKerusakan[index];
+                      // Menampilkan rentang harga estimasi
+                      String hargaEstimasi = kerusakan['harga_estimasi'] ?? 'Harga tidak tersedia';
+
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: Container(
@@ -152,6 +155,16 @@ class PredictionScreen extends StatelessWidget {
                                 'Confidence: ${kerusakan['confidence'] ?? 'Tidak Diketahui'}',
                                 style: const TextStyle(
                                   fontSize: 14,
+                                  fontFamily: 'Poppins',
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              // Menampilkan rentang harga estimasi
+                              Text(
+                                'Harga Estimasi: $hargaEstimasi',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
                                   fontFamily: 'Poppins',
                                 ),
                               ),

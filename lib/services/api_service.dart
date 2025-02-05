@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.7:5000';
+  static const String baseUrl = 'http://192.168.20.136:5000';
   final storage = const FlutterSecureStorage();
 
   /// Login Endpoint
@@ -194,40 +194,70 @@ class ApiService {
   }
 
   /// Detect Damage Endpoint
-  Future<Map<String, dynamic>?> detectDamage(File imageFile) async {
-    final token = await storage.read(key: 'access_token');
-    if (token == null) {
-      throw Exception('Token tidak ditemukan. Harap login ulang.');
-    }
-
-    print('Mengirim gambar ke API...');
-    final request =
-        http.MultipartRequest('POST', Uri.parse('$baseUrl/detect_damage'));
-
-    request.headers.addAll({
-      'Authorization': 'Bearer $token',
-    });
-
-    request.files
-        .add(await http.MultipartFile.fromPath('file', imageFile.path));
-
-    try {
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      print('Response Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        throw Exception(
-            'Gagal mendapatkan prediksi. Status code: ${response.statusCode}');
-      }
-    } catch (e) {
-      throw Exception('Error during detection: $e');
-    }
+  /// Detect Damage Endpoint
+Future<Map<String, dynamic>?> detectDamage(File imageFile) async {
+  final token = await storage.read(key: 'access_token');
+  if (token == null) {
+    throw Exception('Token tidak ditemukan. Harap login ulang.');
   }
+
+  print('Mengirim gambar ke API...');
+  final request =
+      http.MultipartRequest('POST', Uri.parse('$baseUrl/detect_damage'));
+
+  request.headers.addAll({
+    'Authorization': 'Bearer $token',
+  });
+
+  request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+  try {
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    print('Response Status Code: ${response.statusCode}');
+    print('Response Body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> data = jsonDecode(response.body);
+
+      // Print the response for debugging
+      print('Decoded response: $data');
+
+      if (data['status'] == 'success') {
+        // Check for detection results, including price range
+        var daftarKerusakan = data['daftar_kerusakan'] as List;
+        for (var damage in daftarKerusakan) {
+          if (damage['harga_estimasi'] is String) {
+            // If harga_estimasi is a string (e.g., "Harga tidak tersedia")
+            continue;
+          }
+          // If harga_estimasi is a range, split it to make it more readable
+          if (damage['harga_estimasi'] != null) {
+            String hargaEstimasi = damage['harga_estimasi'];
+            damage['harga_estimasi'] = 'Rp $hargaEstimasi';
+          }
+        }
+
+        return {
+          'status': data['status'],
+          'waktu_proses': data['waktu_proses'],
+          'jumlah_kerusakan': data['jumlah_kerusakan'],
+          'daftar_kerusakan': data['daftar_kerusakan'],
+          'gambar_hasil': data['gambar_hasil'],
+        };
+      } else {
+        throw Exception('Gagal mendapatkan prediksi: ${data['pesan']}');
+      }
+    } else {
+      throw Exception(
+          'Gagal mendapatkan prediksi. Status code: ${response.statusCode}');
+    }
+  } catch (e) {
+    throw Exception('Error during detection: $e');
+  }
+}
+
 
   /// Mengecek apakah file terlalu besar untuk dikirim
   static Future<bool> _isFileTooLarge(File imageFile) async {
