@@ -31,7 +31,7 @@ DAMAGE_LABELS = ['retak', 'penyok', 'pecah kaca', 'lampu rusak', 'goresan', 'ban
 # Mapping tingkat keparahan
 SEVERITY_MAPPING = {
     'retak': 'Rusak Sedang',
-    'penyok': 'Rusak Sedang',
+    'penyok': 'Rusak Sedang', 
     'pecah kaca': 'Rusak Berat',
     'lampu rusak': 'Rusak Sedang',
     'goresan': 'Rusak Ringan',
@@ -357,18 +357,34 @@ def detect_damage():
         damages = {}
         for result in results[0].boxes.data.tolist():
             x1, y1, x2, y2, confidence, class_id = result
-            damage_type = DAMAGE_LABELS[int(class_id)]
+            damage_type = DAMAGE_LABELS[int(class_id)]  
+
+            # Ambil tingkat keparahan sesuai tipe kerusakan
+            severity = SEVERITY_MAPPING.get(damage_type) 
 
             if float(confidence) < 0.5:
                 continue
 
+            # Ambil rentang harga estimasi kerusakan berdasarkan tipe dan tingkat keparahan
+            cur = mysql.connection.cursor()
+            cur.execute("""
+                SELECT price_min, price_max FROM damage_estimations 
+                WHERE damage_type = %s AND severity = %s
+            """, (damage_type, severity))
+            price_data = cur.fetchone()
+            # Jika harga estimasi ditemukan
+            if price_data:
+                price_min, price_max = price_data
+                price_range = f"Rp {price_min:,.2f} - Rp {price_max:,.2f}"
+            else:
+                price_range = "Harga tidak tersedia"  
             damages[damage_type] = {
                 "tipe_kerusakan": damage_type,
-                "tingkat_keparahan": SEVERITY_MAPPING[damage_type],
+                "tingkat_keparahan": severity,
+                "harga_estimasi": price_range,
                 "bbox": [float(x1), float(y1), float(x2), float(y2)],
                 "confidence": f"{float(confidence):.2%}"
             }
-
         damages_list = list(damages.values())
         duration = time.time() - start_time
 
@@ -381,7 +397,7 @@ def detect_damage():
         cur = mysql.connection.cursor()
         current_user_id = get_jwt_identity()
 
-        cur.execute("""
+        cur.execute(""" 
             SELECT plat_nomor, model_kendaraan, tahun_kendaraan 
             FROM vehicles 
             WHERE user_id = %s 
@@ -419,11 +435,12 @@ def detect_damage():
             "status": "success",
             "waktu_proses": f"{duration:.4f}s",
             "jumlah_kerusakan": len(damages_list),
-            "daftar_kerusakan": damages_list if damages_list else [  # Jika tidak ada kerusakan
+            "daftar_kerusakan": damages_list if damages_list else [
                 {
                     "tipe_kerusakan": "Tidak terdeteksi",
                     "tingkat_keparahan": "Model kurang yakin memprediksi",
-                    "confidence": "0%"
+                    "confidence": "0%",
+                    "harga_estimasi": "Harga tidak tersedia"
                 }
             ],
             "gambar_hasil": img_str
@@ -434,6 +451,7 @@ def detect_damage():
     except Exception as e:
         print(f"Error in detect_damage: {str(e)}")
         return jsonify({"status": "error", "pesan": str(e)}), 500
+
         
 @app.route('/save_detection_results', methods=['POST'])
 @jwt_required()
