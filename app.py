@@ -13,6 +13,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from PIL import Image, UnidentifiedImageError
 import torch
 from ultralytics import YOLO
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+import numpy as np
 
 # Inisialisasi Flask app
 app = Flask(__name__)
@@ -355,6 +357,9 @@ def detect_damage():
         results = model(image)
 
         damages = {}
+        ground_truth_labels = []  # Label yang benar (ground truth)
+        predicted_labels = []  # Label prediksi dari model
+
         for result in results[0].boxes.data.tolist():
             x1, y1, x2, y2, confidence, class_id = result
             damage_type = DAMAGE_LABELS[int(class_id)]  
@@ -365,6 +370,11 @@ def detect_damage():
             if float(confidence) < 0.5:
                 continue
 
+            # Tambahkan label prediksi dan ground truth
+            predicted_labels.append(damage_type)
+            # Asumsi ground truth sesuai label tipe kerusakan yang diharapkan
+            ground_truth_labels.append(damage_type)
+
             # Ambil rentang harga estimasi kerusakan berdasarkan tipe dan tingkat keparahan
             cur = mysql.connection.cursor()
             cur.execute("""
@@ -372,12 +382,14 @@ def detect_damage():
                 WHERE damage_type = %s AND severity = %s
             """, (damage_type, severity))
             price_data = cur.fetchone()
+            
             # Jika harga estimasi ditemukan
             if price_data:
                 price_min, price_max = price_data
                 price_range = f"Rp {price_min:,.2f} - Rp {price_max:,.2f}"
             else:
-                price_range = "Harga tidak tersedia"  
+                price_range = "Harga tidak tersedia"  # Placeholder jika harga tidak tersedia
+
             damages[damage_type] = {
                 "tipe_kerusakan": damage_type,
                 "tingkat_keparahan": severity,
@@ -385,9 +397,33 @@ def detect_damage():
                 "bbox": [float(x1), float(y1), float(x2), float(y2)],
                 "confidence": f"{float(confidence):.2%}"
             }
+
         damages_list = list(damages.values())
         duration = time.time() - start_time
 
+        # Debugging: Cek hasil dari ground_truth_labels dan predicted_labels
+        print(f"Ground Truth Labels: {ground_truth_labels}")
+        print(f"Predicted Labels: {predicted_labels}")
+
+        # Evaluasi model: Confusion Matrix dan metrik lainnya
+        if ground_truth_labels and predicted_labels:
+            cm = confusion_matrix(ground_truth_labels, predicted_labels, labels=DAMAGE_LABELS)
+            accuracy = accuracy_score(ground_truth_labels, predicted_labels)
+            precision = precision_score(ground_truth_labels, predicted_labels, average='weighted', zero_division=0)
+            recall = recall_score(ground_truth_labels, predicted_labels, average='weighted', zero_division=0)
+            f1 = f1_score(ground_truth_labels, predicted_labels, average='weighted', zero_division=0)
+
+            evaluation_metrics = {
+                "confusion_matrix": cm.tolist(),  # Mengonversi numpy array menjadi list agar bisa dikirim ke frontend
+                "accuracy": accuracy,
+                "precision": precision,
+                "recall": recall,
+                "f1_score": f1
+            }
+        else:
+            evaluation_metrics = {}
+
+        # Rendered image
         rendered_image = results[0].plot()
         buffered = io.BytesIO()
         Image.fromarray(rendered_image).save(buffered, format="JPEG")
@@ -412,7 +448,7 @@ def detect_damage():
 
         try:
             for damage in damages_list:
-                cur.execute("""
+                cur.execute(""" 
                     INSERT INTO detection_results (
                         user_id, label, detection_time, plat_nomor, 
                         model_kendaraan, tahun_kendaraan, created_at
@@ -443,7 +479,8 @@ def detect_damage():
                     "harga_estimasi": "Harga tidak tersedia"
                 }
             ],
-            "gambar_hasil": img_str
+            "gambar_hasil": img_str,
+            "evaluation_metrics": evaluation_metrics 
         }
 
         return jsonify(response)
@@ -451,7 +488,6 @@ def detect_damage():
     except Exception as e:
         print(f"Error in detect_damage: {str(e)}")
         return jsonify({"status": "error", "pesan": str(e)}), 500
-
         
 @app.route('/save_detection_results', methods=['POST'])
 @jwt_required()
