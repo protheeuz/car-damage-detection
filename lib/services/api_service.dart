@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.20.136:5000';
+  static const String baseUrl = 'http://192.168.217.42:5000';
   final storage = const FlutterSecureStorage();
 
   /// Login Endpoint
@@ -194,7 +194,6 @@ class ApiService {
   }
 
   /// Detect Damage Endpoint
-  /// Detect Damage Endpoint
 Future<Map<String, dynamic>?> detectDamage(File imageFile) async {
   final token = await storage.read(key: 'access_token');
   if (token == null) {
@@ -239,12 +238,16 @@ Future<Map<String, dynamic>?> detectDamage(File imageFile) async {
           }
         }
 
+        // Handle evaluation metrics if they exist in the response
+        var evaluationMetrics = data['evaluation_metrics'] ?? {};
+
         return {
           'status': data['status'],
           'waktu_proses': data['waktu_proses'],
           'jumlah_kerusakan': data['jumlah_kerusakan'],
           'daftar_kerusakan': data['daftar_kerusakan'],
           'gambar_hasil': data['gambar_hasil'],
+          'evaluation_metrics': evaluationMetrics, // Add evaluation metrics to the response
         };
       } else {
         throw Exception('Gagal mendapatkan prediksi: ${data['pesan']}');
@@ -257,7 +260,6 @@ Future<Map<String, dynamic>?> detectDamage(File imageFile) async {
     throw Exception('Error during detection: $e');
   }
 }
-
 
   /// Mengecek apakah file terlalu besar untuk dikirim
   static Future<bool> _isFileTooLarge(File imageFile) async {
