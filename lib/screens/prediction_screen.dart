@@ -15,6 +15,11 @@ class PredictionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<dynamic> daftarKerusakan = predictionResult['daftar_kerusakan'] ?? [];
+    final Map<String, dynamic> evaluationMetrics = predictionResult['evaluation_metrics'] ?? {};
+
+    const List<String> damageLabels = [
+      'retak', 'penyok', 'pecah kaca', 'lampu rusak', 'goresan', 'ban kempes'
+    ];
 
     return Scaffold(
       backgroundColor: Colors.blue[50],
@@ -177,6 +182,73 @@ class PredictionScreen extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+
+            // Tabel Evaluasi Model
+            if (evaluationMetrics.isNotEmpty) ...[
+              const Text(
+                'Evaluasi Model:',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              // Display Confusion Matrix as a Table inside SingleChildScrollView for horizontal scrolling
+              if (evaluationMetrics['confusion_matrix'] != null) ...[
+                const Text('Confusion Matrix:'),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: List.generate(
+                      damageLabels.length,
+                      (index) => DataColumn(
+                        label: Text(
+                          damageLabels[index],
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    rows: List.generate(
+                      evaluationMetrics['confusion_matrix'].length,
+                      (rowIndex) => DataRow(
+                        cells: List.generate(
+                          evaluationMetrics['confusion_matrix'][rowIndex].length,
+                          (colIndex) => DataCell(
+                            Text(
+                              evaluationMetrics['confusion_matrix'][rowIndex][colIndex].toString(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              // Tampilkan metrik lainnya
+              DataTable(
+                columns: const [
+                  DataColumn(label: Text('Metrik')),
+                  DataColumn(label: Text('Nilai')),
+                ],
+                rows: [
+                  DataRow(cells: [
+                    const DataCell(Text('Akurasi')),
+                    DataCell(Text(evaluationMetrics['accuracy'].toStringAsFixed(4))),
+                  ]),
+                  DataRow(cells: [
+                    const DataCell(Text('Presisi')),
+                    DataCell(Text(evaluationMetrics['precision'].toStringAsFixed(4))),
+                  ]),
+                  DataRow(cells: [
+                    const DataCell(Text('Recall')),
+                    DataCell(Text(evaluationMetrics['recall'].toStringAsFixed(4))),
+                  ]),
+                  DataRow(cells: [
+                    const DataCell(Text('F1-Score')),
+                    DataCell(Text(evaluationMetrics['f1_score'].toStringAsFixed(4))),
+                  ]),
+                ],
+              ),
+            ],
           ],
         ),
       ),
